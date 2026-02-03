@@ -21,7 +21,15 @@ class Query:
     # Return False if record doesn't exist or is locked due to 2PL
     """
     def delete(self, primary_key):
-        pass
+        try:
+            if primary_key not in self.table.key_to_rid:
+                return False # Return False if record doesn't exist or is locked due to 2PL
+            rid = self.table.key_to_rid[primary_key]
+            del self.table.page_directory[rid]
+            del self.table.key_to_rid[primary_key]
+            return True # Return True upon succesful deletion
+        except:
+            return False # Return False if delete fails for whatever reason
     
     
     """
@@ -30,8 +38,21 @@ class Query:
     # Returns False if insert fails for whatever reason
     """
     def insert(self, *columns):
-        schema_encoding = '0' * self.table.num_columns
-        pass
+        try:
+            schema_encoding = '0' * self.table.num_columns
+            # All columns should be passed a non-NULL value when inserting
+            if len(columns) != self.table.num_columns or None in columns:
+                return False
+            primary_key = columns[self.table.key]
+            if primary_key in self.table.key_to_rid:
+                return False # Return False if duplicate primary key exists
+            rid = self.table.rid_counter
+            self.table.rid_counter += 1
+            self.table.page_directory[rid] = list(columns)
+            self.table.key_to_rid[primary_key] = rid
+            return True # Return True upon succesful insertion
+        except:
+            return False # Return False if insert fails for whatever reason
 
     
     """
@@ -44,7 +65,20 @@ class Query:
     # Assume that select will never be called on a key that doesn't exist
     """
     def select(self, search_key, search_key_index, projected_columns_index):
-        pass
+        try:
+            results = []
+            rid = self.table.key_to_rid[search_key]
+            columns = self.table.page_directory[rid]
+            projected = []
+            for i in range(self.table.num_columns):
+                if projected_columns_index[i] == 1:
+                    projected.append(columns[i])
+                else:
+                    projected.append(None)
+            results.append(Record(rid, search_key, projected))
+            return results
+        except:
+            return False # Return False if record locked by TPL
 
     
     """
@@ -67,7 +101,17 @@ class Query:
     # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
     """
     def update(self, primary_key, *columns):
-        pass
+        try:
+            if primary_key not in self.table.key_to_rid:
+                return False # Return False if no record exists with given key
+            rid = self.table.key_to_rid[primary_key]
+            record = self.table.page_directory[rid]
+            for i in range(self.table.num_columns):
+                if columns[i] is not None:
+                    record[i] = columns[i]
+            return True # Return True upon succesful update
+        except:
+            return False # Return False if update fails for whatever reason
 
     
     """
@@ -79,7 +123,19 @@ class Query:
     # Returns False if no record exists in the given range
     """
     def sum(self, start_range, end_range, aggregate_column_index):
-        pass
+        try:
+            total = 0
+            found = False
+            for key, rid in self.table.key_to_rid.items():
+                if start_range <= key <= end_range:
+                    total += self.table.page_directory[rid][aggregate_column_index]
+                    found = True
+            # Return False if no record exists in the given range
+            if not found:
+                return False
+            return total
+        except:
+            return False
 
     
     """
