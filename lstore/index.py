@@ -14,6 +14,10 @@ class Index:
     """
 
     def locate(self, column, value):
+        if value in column:
+            return location of value # pseudo
+        else:
+            return None
         pass
 
     """
@@ -21,6 +25,10 @@ class Index:
     """
 
     def locate_range(self, begin, end, column):
+        if RID == record.RID:
+            for RID == record.RID:
+                return record.value
+            go next?
         pass
 
     """
