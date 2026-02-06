@@ -16,8 +16,9 @@ class Index:
     def locate(self, column, value):
         all = self.indices[column]
         if all.has_key[value]:
-            print all.[value]
-        return None
+            return all.[value]
+        else:
+            return None
 
     """
     # Returns the RIDs of all records with values in column "column" between "begin" and "end"
