@@ -10,8 +10,9 @@ class Database():
     def open(self, path):
         pass
 
+    #Not required for milestone1
     def close(self):
-        self.tables.clear()
+        pass
 
     """
     # Creates a new table
