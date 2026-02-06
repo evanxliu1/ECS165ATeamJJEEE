@@ -1,64 +1,30 @@
+from struct import pack_into, unpack_from
+from lstore.config import PAGE_SIZE, RECORD_SIZE, RECORDS_PER_PAGE
+
 class Page:
-
-
+    # each page is a 4KB chunk that holds 64-bit ints
+    # can fit 512 records max (4096 / 8)
 
     def __init__(self):
-
         self.num_records = 0
-
-        self.data = bytearray(4096)
-
-
+        self.data = bytearray(PAGE_SIZE)
 
     def has_capacity(self):
+        return self.num_records < RECORDS_PER_PAGE
 
-        return self.num_records < 512
-
-
-
+    # append value to the next open slot
     def write(self, value):
-
         if not self.has_capacity():
-
-            return False
-
-        start_index = self.num_records * 8
-
-    
-
-        if value is None:
-
-            value = 0 
-
-            
-
-        bytes_value = int(value).to_bytes(8, byteorder='little')
-
-
-        self.data[start_index : start_index + 8] = bytes_value
-
-        
-
+            return -1
+        spot = self.num_records
+        pack_into('q', self.data, spot * RECORD_SIZE, value)
         self.num_records += 1
+        return spot
 
-        return True
+    # write at a specific index (used for updating metadata etc)
+    def write_at(self, idx, value):
+        pack_into('q', self.data, idx * RECORD_SIZE, value)
 
-
-
-   
-
-    def read(self, record_index):
-
-        if record_index >= self.num_records:
-
-            return None 
-
-
-
-        start_index = record_index * 8
-
-        bytes_value = self.data[start_index : start_index + 8]
-
-        
-
-        return int.from_bytes(bytes_value, byteorder='little')
+    # read the int stored at index
+    def read(self, idx):
+        return unpack_from('q', self.data, idx * RECORD_SIZE)[0]
