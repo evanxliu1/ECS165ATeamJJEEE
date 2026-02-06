@@ -25,12 +25,12 @@ class Index:
     """
 
     def locate_range(self, begin, end, column):
-            if begin > end:
-                return (self.all[column].values(min = end, max = begin))[::-1]
-            elif end > begin:
-                return (self.all[column].values(min = begin, max = end))[::-1]
-            else:
-                return None
+        if begin > end:
+            return (self.all[column].values(min = end, max = begin))[::-1]
+        elif end > begin:
+            return (self.all[column].values(min = begin, max = end))[::-1]
+        else:
+            return None
 
     """
     # optional: Create index on specific column
