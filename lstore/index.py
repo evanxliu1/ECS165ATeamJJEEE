@@ -28,7 +28,7 @@ class Index:
         if begin > end:
             return (self.all[column].values(min = end, max = begin))[::-1]
         elif end > begin:
-            return (self.all[column].values(min = begin, max = end))[::-1]
+            return (self.all[column].values(min = begin, max = end))
         else:
             return None
 
