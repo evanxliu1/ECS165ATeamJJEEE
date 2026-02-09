@@ -1,23 +1,22 @@
 """
-Index for the table columns. We use a dictionary (hash map) for O(1) lookups.
-The key column always gets an index, other columns can be added later.
+So this is our Index class. Basicaaly like the index found in a textbook. Instead of flipping through every page to find something, we use a hash map so lookups are basically instant, O(1).
+The key column always gets an index by default, but we can index other columns too if we want faster searches on them.
 """
 
 class Index:
 
     def __init__(self, table):
-        # one slot per column, None = not indexed
+        # we make one slot per column, and None means "not indexed yet"
         self.indices = [None] * table.num_columns
-        # always index the primary key
+        # the primary key column always gets indexed right away
         self.indices[table.key] = {}
 
-    # find all record ids that have this value in the given column
+    # if we dont have an index on that column, we just return an empty list
     def locate(self, column, value):
         if self.indices[column] is None:
             return []
         return list(self.indices[column].get(value, []))
 
-    # find all rids where column value is between begin and end
     def locate_range(self, begin, end, column):
         if self.indices[column] is None:
             return []
@@ -27,7 +26,7 @@ class Index:
                 result.extend(rids)
         return result
 
-    # add a new entry to the index
+    # when we insert a new record, we call this to add its rid  to the right bucket in the index. if the column isnt indexed we skip it!
     def insert_entry(self, column, value, rid):
         if self.indices[column] is None:
             return
@@ -35,12 +34,11 @@ class Index:
             self.indices[column][value] = []
         self.indices[column][value].append(rid)
 
-    # when a value changes we need to move the rid
     def update_entry(self, column, old_val, new_val, rid):
         self.delete_entry(column, old_val, rid)
         self.insert_entry(column, new_val, rid)
 
-    # remove a rid from the index
+    # if that bucket ends up empty after removal, we clean it up so we dont leave empty lists hanging around
     def delete_entry(self, column, value, rid):
         if self.indices[column] is None:
             return
@@ -52,10 +50,10 @@ class Index:
             # clean up empty lists
             if len(self.indices[column][value]) == 0:
                 del self.indices[column][value]
-
     def create_index(self, column_number):
         if self.indices[column_number] is None:
             self.indices[column_number] = {}
 
+    # turn off indexing for a column
     def drop_index(self, column_number):
         self.indices[column_number] = None

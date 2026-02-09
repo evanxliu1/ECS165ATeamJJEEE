@@ -16,32 +16,32 @@ class Record:
 
 class PageRange:
     """
-    holds a bunch of base pages and tail pages for a group of records.
-    each "page" is actually a list of Page objects, one per column
-    (because columnar storage means each column gets its own page).
-    we allocate pages lazily so we dont waste memory.
+    A page range is basically a container that holds a group of base pages
+    and their associated tail pages. In L-Store, records get split into
+    base records and tail records.
+
+    Because we use columnar storage, each "page" here is actually a list
+    of Page objects, one per column. So if we have 7 total columns
+    (4 metadata + 3 user), each base page set has 7 physical pages. we only allocate new ones when we actually need the space as this keeps memory usage down.
     """
 
     def __init__(self, num_cols):
         self.num_cols = num_cols
-        self.base_pages = []   # list of page sets
+        self.base_pages = []  
         self.tail_pages = []
         self.num_base_records = 0
         self.num_tail_records = 0
 
     def has_capacity(self):
         return self.num_base_records < RECORDS_PER_PAGE_RANGE
-
-    # make sure we have enough base pages allocated
     def _grow_base(self, need_idx):
         while len(self.base_pages) <= need_idx:
             self.base_pages.append([Page() for _ in range(self.num_cols)])
 
-    # same thing for tail pages
+    # same idea but for tail pages
     def _grow_tail(self, need_idx):
         while len(self.tail_pages) <= need_idx:
             self.tail_pages.append([Page() for _ in range(self.num_cols)])
-
     def add_base_record(self, vals):
         pg = self.num_base_records // RECORDS_PER_PAGE
         slot = self.num_base_records % RECORDS_PER_PAGE
@@ -50,7 +50,6 @@ class PageRange:
             self.base_pages[pg][c].write_at(slot, vals[c])
         self.num_base_records += 1
         return pg, slot
-
     def add_tail_record(self, vals):
         pg = self.num_tail_records // RECORDS_PER_PAGE
         slot = self.num_tail_records % RECORDS_PER_PAGE
@@ -59,25 +58,20 @@ class PageRange:
             self.tail_pages[pg][c].write_at(slot, vals[c])
         self.num_tail_records += 1
         return pg, slot
-
-    # read one column from a base record
+    # this reads a single column value from a base record at the given page and slot
     def get_base_val(self, pg, slot, col):
         return self.base_pages[pg][col].read(slot)
-
-    # read one column from a tail record
     def get_tail_val(self, pg, slot, col):
         return self.tail_pages[pg][col].read(slot)
-
-    # overwrite one column in a base record
     def set_base_val(self, pg, slot, col, val):
         self.base_pages[pg][col].write_at(slot, val)
 
 
 class Table:
     """
-    :param name: string         #Table name
-    :param num_columns: int     #Number of Columns: all columns are integer
-    :param key: int             #Index of table key in columns
+    This is the main Table class. It represents one table in our database.
+    All columns store 64-bit integers (no strings or floats for now).  We tack on 4 metadata columns in front
+    (indirection, rid, timestamp, schema encoding), so the total column count is always num_columns + 4.
     """
     def __init__(self, name, num_columns, key):
         self.name = name
@@ -86,18 +80,14 @@ class Table:
         self.total_cols = num_columns + NUM_META_COLS
 
         self.page_ranges = []
-        # maps rid -> (range_idx, is_tail, page_idx, slot)
         self.page_directory = {}
-        self.next_rid = 1   # 0 is reserved as null
+        self.next_rid = 1  
 
         self.index = Index(self)
-
     def new_rid(self):
         r = self.next_rid
         self.next_rid += 1
         return r
-
-    # get a page range that has room for a new base record
     def _current_range(self):
         if len(self.page_ranges) == 0 or not self.page_ranges[-1].has_capacity():
             self.page_ranges.append(PageRange(self.total_cols))

@@ -2,17 +2,20 @@ from struct import pack_into, unpack_from
 from lstore.config import PAGE_SIZE, RECORD_SIZE, RECORDS_PER_PAGE
 
 class Page:
-    # each page is a 4KB chunk that holds 64-bit ints
-    # can fit 512 records max (4096 / 8)
+    """
+    This is our lowest-level storage unit. Each page is a 4KB chunk of memory
+    that we use to store 64-bit integers. Since each int is 8 bytes, we can
+    fit 512 of them in one page (4096 / 8 = 512).
+    """
 
     def __init__(self):
         self.num_records = 0
         self.data = bytearray(PAGE_SIZE)
 
+    # just checks if we still have room to write another record
     def has_capacity(self):
         return self.num_records < RECORDS_PER_PAGE
 
-    # append value to the next open slot
     def write(self, value):
         if not self.has_capacity():
             return -1
@@ -21,10 +24,9 @@ class Page:
         self.num_records += 1
         return spot
 
-    # write at a specific index (used for updating metadata etc)
     def write_at(self, idx, value):
         pack_into('q', self.data, idx * RECORD_SIZE, value)
 
-    # read the int stored at index
+    # here we read the 64-bit int stored at the given index
     def read(self, idx):
         return unpack_from('q', self.data, idx * RECORD_SIZE)[0]
