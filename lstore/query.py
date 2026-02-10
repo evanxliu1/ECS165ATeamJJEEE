@@ -17,7 +17,7 @@ class Query:
         """
         self.table = table
         
-    def get_record_values(self, base_rid, version=0):
+    def _get_record_values(self, base_rid, version=0):
         """
         #Returns the column values for a record which is identified by base_rid, if the base record's pointer points to
         #no tails then it returns the values from the base records, otherwise it follows the chain of pointers to the tail record
