@@ -1,6 +1,6 @@
 """
-So this is our Index class. Basicaaly like the index found in a textbook. 
-Instead of flipping through every page to find something, we use a hash map so lookups are basically instant, O(1).
+So this is our Index class. Basically like the index found in a textbook. 
+Instead of flipping through every page to find something, we use a hash map, so lookups are basically instant, O(1).
 The key column always gets an index by default, but we can index other columns too if we want faster searches on them.
 """
 
