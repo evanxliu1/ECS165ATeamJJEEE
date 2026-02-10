@@ -32,16 +32,37 @@ class PageRange:
         self.num_base_records = 0
         self.num_tail_records = 0
 
+    """
+    #Boolean function to check whether or not the record has capacity
+    no parameters, just use .has_capacity on a record to check
+    """
+
     def has_capacity(self):
         return self.num_base_records < RECORDS_PER_PAGE_RANGE
+
+    """
+    #Checks whether self is large enough to include the given index need_idx
+    :param need_idx: int    #List index that must exist
+    """
+    
     def _grow_base(self, need_idx):
         while len(self.base_pages) <= need_idx:
             self.base_pages.append([Page() for _ in range(self.num_cols)])
 
-    # same idea but for tail pages
+    """
+    #Same idea but for tail pages
+    :param need_idx: int    #Index we are checking
+    """
+    
     def _grow_tail(self, need_idx):
         while len(self.tail_pages) <= need_idx:
             self.tail_pages.append([Page() for _ in range(self.num_cols)])
+
+    """
+    #Adds one new record to the base storage
+    :param vals: list    #The list of column values for the new record
+    """
+    
     def add_base_record(self, vals):
         pg = self.num_base_records // RECORDS_PER_PAGE
         slot = self.num_base_records % RECORDS_PER_PAGE
@@ -50,6 +71,12 @@ class PageRange:
             self.base_pages[pg][c].write_at(slot, vals[c])
         self.num_base_records += 1
         return pg, slot
+
+    """
+    #Adds one new record at tail, not base
+    :param vals: list    #The list of updated column values
+    """
+    
     def add_tail_record(self, vals):
         pg = self.num_tail_records // RECORDS_PER_PAGE
         slot = self.num_tail_records % RECORDS_PER_PAGE
@@ -58,11 +85,35 @@ class PageRange:
             self.tail_pages[pg][c].write_at(slot, vals[c])
         self.num_tail_records += 1
         return pg, slot
-    # this reads a single column value from a base record at the given page and slot
+
+    """
+    #Reads a single column value from a base record at the given page and slot
+    :param pg: int     #Which base page
+    :param slot: int     #Which record position inside that page
+    :param col: int     #Which column
+    """
+
     def get_base_val(self, pg, slot, col):
         return self.base_pages[pg][col].read(slot)
+
+    """
+    #Reads one value from tail storage ^same, but tail-record counterpart
+    :param pg: int     #Which tail page
+    :param slot: int     #Which slot, record position in that page
+    :param col: int     #Which column to read
+    """
+
     def get_tail_val(self, pg, slot, col):
         return self.tail_pages[pg][col].read(slot)
+
+    """
+    #Updates a single value in a base record
+    :param pg: int     #Which base page
+    :param slot: int     #Which record position within the page
+    :param col: int     #Which column
+    :param val: type depends on the selected column type    #The value to store
+    """
+
     def set_base_val(self, pg, slot, col, val):
         self.base_pages[pg][col].write_at(slot, val)
 
@@ -73,6 +124,7 @@ class Table:
     All columns store 64-bit integers (no strings or floats for now).  We tack on 4 metadata columns in front
     (indirection, rid, timestamp, schema encoding), so the total column count is always num_columns + 4.
     """
+
     def __init__(self, name, num_columns, key):
         self.name = name
         self.key = key
@@ -84,15 +136,32 @@ class Table:
         self.next_rid = 1  
 
         self.index = Index(self)
+
+    """
+    #Generates and returns a new unque record ID
+    no parameter, returns the created new record ID
+    """
+    
     def new_rid(self):
         r = self.next_rid
         self.next_rid += 1
         return r
+
+    """
+    #Finds or creates the active page range where new records should be inserted
+    no parameter
+    """
+    
     def _current_range(self):
         if len(self.page_ranges) == 0 or not self.page_ranges[-1].has_capacity():
             self.page_ranges.append(PageRange(self.total_cols))
         return len(self.page_ranges) - 1, self.page_ranges[-1]
 
+    """
+    #Placeholder for a merge operation
+    no parameter
+    """
+    
     def __merge(self):
         print("merge is happening")
         pass
