@@ -5,8 +5,10 @@ from time import time
 
 class Query:
     """
-    This is where all the action happens. The Query class is how we actually communicate with the table. It handles insert, select, update, delete, and sum.
-    If something goes wrong, we return False. If it works, we return the result or True. We wrap everything in try/except so a crash never  bubbles up and it just returns False instead.
+    This is where all the action happens. The Query class is how we actually communicate with the table. 
+    It handles insert, select, update, delete, and sum.
+    If something goes wrong, we return False. If it works, we return the result or True. 
+    We wrap everything in try/except so a crash never  bubbles up and it just returns False instead.
     """
     def __init__(self, table):
         self.table = table
