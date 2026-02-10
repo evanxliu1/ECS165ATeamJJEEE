@@ -34,7 +34,6 @@ class PageRange:
 
     """
     #Boolean function to check whether or not the record has capacity
-    no parameters, just use .has_capacity on a record to check
     """
 
     def has_capacity(self):
@@ -139,7 +138,6 @@ class Table:
 
     """
     #Generates and returns a new unque record ID
-    no parameter, returns the created new record ID
     """
     
     def new_rid(self):
@@ -149,7 +147,6 @@ class Table:
 
     """
     #Finds or creates the active page range where new records should be inserted
-    no parameter
     """
     
     def _current_range(self):
@@ -159,7 +156,6 @@ class Table:
 
     """
     #Placeholder for a merge operation
-    no parameter
     """
     
     def __merge(self):
