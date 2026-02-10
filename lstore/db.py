@@ -33,6 +33,7 @@ class Database():
     
     """
     # Deletes the specified table
+    :param name: string       # name of the table
     """
     def drop_table(self, name):
         if name in self.tables:
@@ -44,6 +45,7 @@ class Database():
     
     """
     # Returns table with the passed name
+    :param name: string      # name of the table
     """
     def get_table(self, name):
         return self.tables.get(name, None) #returns table otherwise none
