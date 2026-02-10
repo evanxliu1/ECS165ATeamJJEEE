@@ -10,7 +10,7 @@ class Page:
 
     def __init__(self):
     """"
-      # Initializes a new empty page
+    # Initializes a new empty page
     """
         self.num_records = 0
         self.data = bytearray(PAGE_SIZE)
