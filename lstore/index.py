@@ -6,7 +6,7 @@ The key column always gets an index by default, but we can index other columns t
 
 class Index:
     """
-    # Initalizes the table
+    # Initializes the table
     :param table: Table        # the table object that will store the data
     """
     def __init__(self, table):
@@ -18,13 +18,14 @@ class Index:
 
     """
     # Locates a specific value
-    :param column: int        # the number column in the database
-    :param value: string      # the value we are searching for
+    :param column: int     # the number column in the database
+    :param value: int      # the value we are searching for
     """
     # if we dont have an index on that column, we just return an empty list
     def locate(self, column, value):
         if self.indices[column] is None:
             return []
+        # returns list of RIDs
         return list(self.indices[column].get(value, []))
 
     
@@ -32,7 +33,7 @@ class Index:
     # Locates a range of values
     :param begin: int         # beginning of the range
     :param end: int           # end of the range
-    :param column: int        # the number column in the index 
+    :param column: int        # the index of the column within indices
     """
     def locate_range(self, begin, end, column):
         if self.indices[column] is None:
@@ -40,13 +41,14 @@ class Index:
         result = []
         for val, rids in self.indices[column].items():
             if begin <= val <= end:
+                # returns list of RIDs
                 result.extend(rids)
         return result
 
 
     """
     # Inserts a record into the index
-    :param value: string      # the value of the record to be inserted
+    :param value: int         # the value of the record to be inserted
     :param rid: int           # the id of the record so we can trace back to it later
     :param column: int        # the number column in the database
     """
@@ -61,20 +63,22 @@ class Index:
     
     """
     # Updates a preexisting record
-    :param old_val: string    # the original value of the record
-    :param new_val: string    # the updated value of the record
+    :param old_val: int       # the original value of the record
+    :param new_val: int       # the updated value of the record
     :param rid: int           # the id of the record we are tracing back to
     :param column: int        # the number column in the database
     """
     def update_entry(self, column, old_val, new_val, rid):
+        # removes the old value reference
         self.delete_entry(column, old_val, rid)
+        # inserts the new value reference
         self.insert_entry(column, new_val, rid)
     # Updates a preexisting record
 
     
     """
     # Deletes a preexisting record
-    :param value: str         # the value whose record we are trying to delete
+    :param value: int         # the value whose RID we are trying to delete from the index
     :param rid: int           # the id of the record we are tracing back to
     :param column: int        # the number column in the database
     """
