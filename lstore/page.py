@@ -9,14 +9,25 @@ class Page:
     """
 
     def __init__(self):
+    '''
+      # Initializes a new empty page
+    '''
         self.num_records = 0
         self.data = bytearray(PAGE_SIZE)
 
-    # just checks if we still have room to write another record
     def has_capacity(self):
+    '''
+    # Checks if we still have room to write another record
+    '''
         return self.num_records < RECORDS_PER_PAGE
 
     def write(self, value):
+    '''
+    # Adds a new value to the page, written at the next available slot
+    # Returns the index where the value was written or -1 if the page is already full
+    :param value: int    # Integer to be stored 
+    :return: int         # Index where the value was written
+    '''
         if not self.has_capacity():
             return -1
         spot = self.num_records
@@ -25,8 +36,17 @@ class Page:
         return spot
 
     def write_at(self, idx, value):
+    '''
+    # Writes a value at a specific index on the page, primarily for updates where we overwrite an existing code
+    :param idx: int        # Index of the record to overwrite
+    :return: int           # New integer value
+    '''
         pack_into('q', self.data, idx * RECORD_SIZE, value)
 
-    # here we read the 64-bit int stored at the given index
     def read(self, idx):
+    '''
+    # Return the integer stored at a given index in the page
+    :param idx: int        # Index of the record to read
+    :return: int           # Integer stored at the given index
+    '''
         return unpack_from('q', self.data, idx * RECORD_SIZE)[0]
