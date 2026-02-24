@@ -9,10 +9,10 @@ class Query:
         self.table = table
 
     def _locate(self, column, value):
-        """Locate RIDs by column value, falling back to full scan if no index."""
+
         if self.table.index.indices[column] is not None:
             return self.table.index.locate(column, value)
-        # full scan over all base records
+
         rids = []
         for rid, loc in self.table.page_directory.items():
             _, is_tail, _, _ = loc
@@ -24,7 +24,7 @@ class Query:
         return rids
 
     def _locate_range(self, begin, end, column):
-        """Locate RIDs in a key range, falling back to full scan if no index."""
+
         if self.table.index.indices[column] is not None:
             return self.table.index.locate_range(begin, end, column)
         rids = []
@@ -78,7 +78,7 @@ class Query:
                 return False
             rid = rids[0]
 
-            # get current values to remove from all active indexes
+
             vals = self._get_record_values(rid)
             for i in range(self.table.num_columns):
                 if self.table.index.indices[i] is not None:
@@ -115,7 +115,7 @@ class Query:
             pg, slot = pr.add_base_record(row)
             self.table.page_directory[rid] = (ri, False, pg, slot)
 
-            # update all active indexes
+
             for i in range(self.table.num_columns):
                 if self.table.index.indices[i] is not None:
                     self.table.index.insert_entry(i, columns[i], rid)
@@ -219,7 +219,7 @@ class Query:
             old_schema = pr.get_base_val(pg, slot, SCHEMA_ENCODING_COLUMN)
             pr.set_base_val(pg, slot, SCHEMA_ENCODING_COLUMN, old_schema | schema)
 
-            # update all active indexes for changed columns
+
             for i in range(self.table.num_columns):
                 if columns[i] is not None and self.table.index.indices[i] is not None:
                     if cur_vals[i] != new_vals[i]:
