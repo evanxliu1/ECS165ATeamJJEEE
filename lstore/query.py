@@ -1,4 +1,4 @@
-from lstore.table import Table, Record
+from lstore.table import Record
 from lstore.config import *
 from time import time
 
@@ -7,6 +7,35 @@ class Query:
 
     def __init__(self, table):
         self.table = table
+
+    def _locate(self, column, value):
+        """Locate RIDs by column value, falling back to full scan if no index."""
+        if self.table.index.indices[column] is not None:
+            return self.table.index.locate(column, value)
+        # full scan over all base records
+        rids = []
+        for rid, loc in self.table.page_directory.items():
+            _, is_tail, _, _ = loc
+            if is_tail:
+                continue
+            vals = self._get_record_values(rid)
+            if vals[column] == value:
+                rids.append(rid)
+        return rids
+
+    def _locate_range(self, begin, end, column):
+        """Locate RIDs in a key range, falling back to full scan if no index."""
+        if self.table.index.indices[column] is not None:
+            return self.table.index.locate_range(begin, end, column)
+        rids = []
+        for rid, loc in self.table.page_directory.items():
+            _, is_tail, _, _ = loc
+            if is_tail:
+                continue
+            vals = self._get_record_values(rid)
+            if begin <= vals[column] <= end:
+                rids.append(rid)
+        return rids
 
     def _get_record_values(self, base_rid, version=0):
         loc = self.table.page_directory[base_rid]
@@ -97,7 +126,7 @@ class Query:
 
     def select(self, search_key, search_key_index, projected_columns_index):
         try:
-            rids = self.table.index.locate(search_key_index, search_key)
+            rids = self._locate(search_key_index, search_key)
             if not rids:
                 return []
 
@@ -121,7 +150,7 @@ class Query:
 
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         try:
-            rids = self.table.index.locate(search_key_index, search_key)
+            rids = self._locate(search_key_index, search_key)
             if not rids:
                 return []
 
@@ -203,7 +232,7 @@ class Query:
 
     def sum(self, start_range, end_range, aggregate_column_index):
         try:
-            rids = self.table.index.locate_range(start_range, end_range, self.table.key)
+            rids = self._locate_range(start_range, end_range, self.table.key)
             if not rids:
                 return False
 
@@ -219,7 +248,7 @@ class Query:
 
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
         try:
-            rids = self.table.index.locate_range(start_range, end_range, self.table.key)
+            rids = self._locate_range(start_range, end_range, self.table.key)
             if not rids:
                 return False
 
