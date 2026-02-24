@@ -17,3 +17,9 @@ NUM_META_COLS = 4
 
 # 0 means no indirection / null pointer basically
 NULL_RID = 0
+
+# bufferpool
+BUFFERPOOL_CAPACITY = 1000
+
+# merge
+MERGE_THRESHOLD = 2048

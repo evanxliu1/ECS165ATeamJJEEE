@@ -1,4 +1,4 @@
-from struct import pack_into, unpack_from
+from struct import pack, pack_into, unpack, unpack_from
 from lstore.config import PAGE_SIZE, RECORD_SIZE, RECORDS_PER_PAGE
 
 class Page:
@@ -50,3 +50,20 @@ class Page:
         :return: int           # Integer stored at the given index
         """
         return unpack_from('q', self.data, idx * RECORD_SIZE)[0]
+
+
+def write_page_to_disk(page, filepath):
+    with open(filepath, 'wb') as f:
+        f.write(pack('q', page.num_records))
+        f.write(page.data)
+
+
+def read_page_from_disk(filepath):
+    with open(filepath, 'rb') as f:
+        header = f.read(8)
+        num_records = unpack('q', header)[0]
+        data = f.read(PAGE_SIZE)
+    p = Page()
+    p.num_records = num_records
+    p.data = bytearray(data)
+    return p
