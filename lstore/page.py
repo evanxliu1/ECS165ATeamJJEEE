@@ -30,7 +30,7 @@ def write_page_to_disk(page, filepath):
     f = open(filepath, 'wb')
     f.write(pack('q', page.num_records))
     f.write(page.data)
-    f.close(
+    f.close()
 def read_page_from_disk(filepath):
     # loads a page object back from disk that was saved with the helper above and reads the record count header and then the full page data bytes
     f = open(filepath, 'rb')
