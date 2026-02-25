@@ -6,11 +6,19 @@ from lstore.config import BUFFERPOOL_CAPACITY
 
 
 class Database:
+    """
+    # initializes the database object
+    """
     def __init__(self):
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
 
+
+    """
+    # opens the database from path with the table's data
+    :param path: string     # the directory path to the database files
+    """
     def open(self, path):
         self.path = path
         os.makedirs(path, exist_ok=True)
@@ -42,6 +50,10 @@ class Database:
             self.tables[tname] = t
             self._rebuild_indexes(t)
 
+
+    """
+    # saves data and closes the database path, effectively flushing data to disk
+    """
     def close(self):
         if self.path is None:
             return
@@ -75,6 +87,11 @@ class Database:
             json.dump(table_meta, f)
             f.close()
 
+
+    """
+    # rebuilds an index using the page directory 
+    :param t: Table         # the table whose index is being rebuilt
+    """
     def _rebuild_indexes(self, t):
         from lstore.query import Query
         q = Query(t)
@@ -85,6 +102,14 @@ class Database:
             vals = q._get_record_values(rid)
             t.index.insert_entry(t.key, vals[t.key], rid)
 
+
+
+    """
+    # Creates a new table
+    :param name: string             #Table name
+    :param num_columns: int         #Number of Columns: all columns are integer
+    :param key_index: int           #Index of table key in columns
+    """
     def create_table(self, name, num_columns, key_index):
         if name in self.tables:
             return self.tables[name]
@@ -92,11 +117,21 @@ class Database:
         self.tables[name] = t
         return t
 
+
+    """
+    # Deletes the specified table
+    :param name: string       # name of the table
+    """
     def drop_table(self, name):
         if name in self.tables:
             del self.tables[name]
             return True
         return False
 
+
+    """
+    # Returns table with the passed name
+    :param name: string      # name of the table
+    """
     def get_table(self, name):
         return self.tables.get(name, None)
