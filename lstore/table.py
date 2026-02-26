@@ -31,6 +31,7 @@ class PageRange:
         self.num_base_records = 0
         self.num_tail_records = 0
         self.tps = {}
+        
     """
     #Creates a unique identifier (ID) for a specific page
     :param is_tail: boolean     #returns true or false depending on whether the current page is a tail page or base page
