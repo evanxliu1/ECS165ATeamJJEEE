@@ -11,12 +11,18 @@ from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 # each database gets one shared bufferpool that all tables use
 """
 class Database:
+    """
+    # initializes the database object
+    """
     def __init__(self):
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
 
-    # loads up a database from disk, reads the metadata json and rebuilds all the tables
+    """
+    # opens the database from path with the table's data
+    :param path: string     # the directory path to the database files
+    """
     def open(self, path):
         self.path = path
         os.makedirs(path, exist_ok=True)
@@ -48,7 +54,10 @@ class Database:
             self.tables[tname] = t
             self._rebuild_indexes(t)
 
-    # saves everything to disk, flushes dirty pages and writes out all the metadata json files
+
+    """
+    # saves data and closes the database path, effectively flushing data to disk
+    """
     def close(self):
         if self.path is None:
             return
@@ -84,6 +93,11 @@ class Database:
             json.dump(table_meta, f)
             f.close()
 
+
+    """
+    # rebuilds an index using the page directory 
+    :param t: Table         # the table whose index is being rebuilt
+    """
     def _rebuild_indexes(self, t):
         # only need the key column, dont bother reading everything
         key_col = t.key
@@ -95,6 +109,14 @@ class Database:
             key_val = pr.get_base_val(pg, slot, NUM_META_COLS + key_col)
             t.index.insert_entry(key_col, key_val, rid)
 
+
+
+    """
+    # Creates a new table
+    :param name: string             #Table name
+    :param num_columns: int         #Number of Columns: all columns are integer
+    :param key_index: int           #Index of table key in columns
+    """
     def create_table(self, name, num_columns, key_index):
         if name in self.tables:
             return self.tables[name]
@@ -102,11 +124,21 @@ class Database:
         self.tables[name] = t
         return t
 
+
+    """
+    # Deletes the specified table
+    :param name: string       # name of the table
+    """
     def drop_table(self, name):
         if name in self.tables:
             del self.tables[name]
             return True
         return False
 
+
+    """
+    # Returns table with the passed name
+    :param name: string      # name of the table
+    """
     def get_table(self, name):
         return self.tables.get(name, None)
