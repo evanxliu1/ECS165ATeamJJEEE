@@ -10,6 +10,7 @@ class BufferPool:
         self.pages = OrderedDict()
         self.dirty = set()
         self.pin_counts = {}
+        self._made_dirs = set()
 
     def _page_filepath(self, page_id):
         a, b, tail, p, c = page_id
@@ -37,6 +38,17 @@ class BufferPool:
         self.pin_counts[pid] = cnt
         return p
 
+    def read_value(self, pid, slot):
+        # fast path when page already cached, dont need to pin for reads
+        page = self.pages.get(pid)
+        if page is not None:
+            return page.read(slot)
+        # not in cache so load it the normal way
+        page = self.get_page(pid)
+        val = page.read(slot)
+        self.unpin(pid)
+        return val
+
     def mark_dirty(self, pid):
         self.dirty.add(pid)
 
@@ -55,28 +67,30 @@ class BufferPool:
         self.dirty.clear()
 
     def _evict(self):
-        for pid in list(self.pages.keys()):
-            if pid in self.pin_counts:
-                continue
-            if pid in self.dirty:
-                self._flush_page(pid)
-                self.dirty.discard(pid)
-            del self.pages[pid]
-            return
+        for pid in self.pages:
+            if pid not in self.pin_counts:
+                if pid in self.dirty:
+                    self._flush_page(pid)
+                    self.dirty.discard(pid)
+                del self.pages[pid]
+                return
         self.capacity = self.capacity + 1
 
     def _load_from_disk(self, pid):
         if self.db_path is None:
             return None
         path = self._page_filepath(pid)
-        if not os.path.exists(path):
+        try:
+            return read_page_from_disk(path)
+        except FileNotFoundError:
             return None
-        return read_page_from_disk(path)
 
     def _flush_page(self, pid):
         if self.db_path is None or pid not in self.pages:
             return None
         path = self._page_filepath(pid)
         d = os.path.dirname(path)
-        os.makedirs(d, exist_ok=True)
+        if d not in self._made_dirs:
+            os.makedirs(d, exist_ok=True)
+            self._made_dirs.add(d)
         write_page_to_disk(self.pages[pid], path)

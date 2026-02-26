@@ -2,7 +2,7 @@ import os
 import json
 from lstore.table import Table, PageRange
 from lstore.bufferpool import BufferPool
-from lstore.config import BUFFERPOOL_CAPACITY
+from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 
 
 class Database:
@@ -76,14 +76,15 @@ class Database:
             f.close()
 
     def _rebuild_indexes(self, t):
-        from lstore.query import Query
-        q = Query(t)
+        # only need the key column, dont bother reading everything
+        key_col = t.key
         for rid, loc in t.page_directory.items():
-            (_, is_tail, _, _) = loc
+            ri, is_tail, pg, slot = loc
             if is_tail:
                 continue
-            vals = q._get_record_values(rid)
-            t.index.insert_entry(t.key, vals[t.key], rid)
+            pr = t.page_ranges[ri]
+            key_val = pr.get_base_val(pg, slot, NUM_META_COLS + key_col)
+            t.index.insert_entry(key_col, key_val, rid)
 
     def create_table(self, name, num_columns, key_index):
         if name in self.tables:
