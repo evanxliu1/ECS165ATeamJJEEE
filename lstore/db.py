@@ -5,12 +5,18 @@ from lstore.bufferpool import BufferPool
 from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 
 
+"""
+# The Database class is the top level thing that manages all the tables
+# handles creating/dropping tables and saving/loading everything to disk
+# each database gets one shared bufferpool that all tables use
+"""
 class Database:
     def __init__(self):
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
 
+    # loads up a database from disk, reads the metadata json and rebuilds all the tables
     def open(self, path):
         self.path = path
         os.makedirs(path, exist_ok=True)
@@ -42,9 +48,11 @@ class Database:
             self.tables[tname] = t
             self._rebuild_indexes(t)
 
+    # saves everything to disk, flushes dirty pages and writes out all the metadata json files
     def close(self):
         if self.path is None:
             return
+        # wait for any merge thats still running
         for t in self.tables.values():
             if t.merge_thread is not None and t.merge_thread.is_alive():
                 t.merge_thread.join()
@@ -56,6 +64,7 @@ class Database:
         f = open(meta_path, 'w')
         json.dump(db_meta, f)
         f.close()
+        # each table gets its own directory with page range and page directory info
         for tname, t in self.tables.items():
             table_dir = os.path.join(self.path, tname)
             os.makedirs(table_dir, exist_ok=True)

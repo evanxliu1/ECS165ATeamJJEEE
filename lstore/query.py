@@ -4,10 +4,30 @@ from time import time
 
 
 class Query:
+    """
+    This is where all the action happens. The Query class is how we actually communicate with the table.
+    It handles insert, select, update, delete, and sum.
+    If something goes wrong, we return False. If it works, we return the result or True.
+    We wrap everything in try/except so a crash never bubbles up and it just returns False instead.
 
+    New in M2: we added _locate and _locate_range helpers so select and sum can work
+    even on columns that dont have an index built yet (falls back to a full scan).
+    We also update all active indexes now, not just the primary key one.
+    """
+
+    """
+    # Initializes the table
+    :param table: Table      # the table object that will store the data
+    """
     def __init__(self, table):
         self.table = table
 
+    """
+    # Finds all base record RIDs where a column equals a value
+    # if theres an index on that column we use it, otherwise we do a full scan
+    :param column: int       # the number column in the database
+    :param value: int        # the value we are looking for
+    """
     def _locate(self, column, value):
 
         if self.table.index.indices[column] is not None:
@@ -24,6 +44,12 @@ class Query:
                 rids.append(rid)
         return rids
 
+    """
+    # Same idea as _locate but for a range of values instead of an exact match
+    :param begin: int        # lower bound of the range
+    :param end: int          # upper bound of the range
+    :param column: int       # the number column in the database
+    """
     def _locate_range(self, begin, end, column):
 
         if self.table.index.indices[column] is not None:
@@ -38,6 +64,13 @@ class Query:
                 rids.append(rid)
         return rids
 
+    """
+    # Returns the column values for a record identified by base_rid, if the base record's
+    # pointer points to no tails then it returns the values from the base records, otherwise
+    # it follows the chain of pointers to the tail record
+    :param base_rid: int     # permanent ID of a record
+    :param version: int      # controls how many tail records you follow
+    """
     def _get_record_values(self, base_rid, version=0):
         loc = self.table.page_directory[base_rid]
         ri, _, pg, slot = loc
@@ -70,6 +103,12 @@ class Query:
         tpr = self.table.page_ranges[tri]
         return tpr.get_tail_vals(tpg, tslot, NUM_META_COLS, self.table.num_columns)
 
+    """
+    # Takes a primary key and deletes the record from all indexes and the page directory
+    :param primary_key: int  # the main unique identifier for a record
+    """
+    # we look it up in the index, remove it from every index it appears in,
+    # and then remove it from the page directory so nobody can find it anymore
     def delete(self, primary_key):
         try:
             rids = self.table.index.locate(self.table.key, primary_key)
@@ -89,6 +128,10 @@ class Query:
         except:
             return False
 
+    """
+    # Inserts a brand new record to the table as a base record and includes where to store and what is stored
+    :param *columns: tuple   # takes any number of values and shoves it all into a tuple
+    """
     def insert(self, *columns):
         try:
             if len(columns) != self.table.num_columns:
@@ -116,6 +159,7 @@ class Query:
             pg, slot = pr.add_base_record(row)
             self.table.page_directory[rid] = (ri, False, pg, slot)
 
+            # add to every index that exists not just the primary key one
             for i in range(self.table.num_columns):
                 if self.table.index.indices[i] is not None:
                     self.table.index.insert_entry(i, columns[i], rid)
@@ -124,6 +168,13 @@ class Query:
         except:
             return False
 
+    """
+    # Finds all records whose values correspond to the search_key and returns only the requested columns
+    # uses _locate to find matching rids (index or scan) then applies the projection
+    :param search_key: int           # value we are searching for
+    :param search_key_index: int     # which column to search in
+    :param projected_columns_index: list  # a list of 0s and 1s indicating which columns to return
+    """
     def select(self, search_key, search_key_index, projected_columns_index):
         try:
             rids = self._locate(search_key_index, search_key)
@@ -136,6 +187,7 @@ class Query:
                     continue
 
                 all_vals = self._get_record_values(rid)
+                # apply the projection (1 = include, 0 = None)
                 cols = []
                 for i in range(self.table.num_columns):
                     if projected_columns_index[i] == 1:
@@ -148,6 +200,13 @@ class Query:
         except:
             return False
 
+    """
+    # Same as select except this function allows us to search for previous tail records
+    :param search_key: int           # value we are searching for
+    :param search_key_index: int     # which column to search in
+    :param projected_columns_index: list  # a list of 0s and 1s indicating which columns to return
+    :param relative_version: int     # how many tail records you look back
+    """
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         try:
             rids = self._locate(search_key_index, search_key)
@@ -173,6 +232,12 @@ class Query:
         except:
             return False
 
+    """
+    # Finds a record with the primary key and creates a new tail record with updated values
+    # then updates the base records pointer to point to this new tail record
+    :param primary_key: int  # the main unique identifier for a record
+    :param *columns: tuple   # whatever you want to insert into the new tail record
+    """
     # here we find the record, read current vals, merge in the new ones and write a tail
     def update(self, primary_key, *columns):
         try:
@@ -242,6 +307,12 @@ class Query:
         except:
             return False
 
+    """
+    # Computes the sum of one column over all records who fall in a certain range
+    :param start_range: int              # lower bound of primary key range
+    :param end_range: int                # upper bound of primary key range
+    :param aggregate_column_index: int   # the column index to sum
+    """
     def sum(self, start_range, end_range, aggregate_column_index):
         try:
             rids = self._locate_range(start_range, end_range, self.table.key)
@@ -258,6 +329,13 @@ class Query:
         except:
             return False
 
+    """
+    # Same as sum but allows you to look back at tail records
+    :param start_range: int              # lower bound of primary key range
+    :param end_range: int                # upper bound of primary key range
+    :param aggregate_column_index: int   # the column index to sum
+    :param relative_version: int         # how many tail records you look back
+    """
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
         try:
             rids = self._locate_range(start_range, end_range, self.table.key)
@@ -274,6 +352,11 @@ class Query:
         except:
             return False
 
+    """
+    # Adds 1 to a single column of the record identified by the primary key
+    :param key: int          # primary key value of the record you want to update
+    :param column: int       # the column index to increment
+    """
     def increment(self, key, column):
         r = self.select(key, self.table.key, [1] * self.table.num_columns)[0]
         if r is not False:
