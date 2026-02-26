@@ -171,6 +171,9 @@ class Table:
         self.next_rid = self.next_rid + 1
         return r
 
+    """
+    #Decides which page range new records should go into
+    """
     def _current_range(self):
         if len(self.page_ranges) == 0:
             self.page_ranges.append(PageRange(self.total_cols, table_name=self.name, range_idx=0, bufferpool=self.bufferpool))
@@ -182,6 +185,11 @@ class Table:
             return ri, self.page_ranges[-1]
         return len(self.page_ranges) - 1, last
 
+    """
+    #Takes updates stored in tail pages and applies the latest values back into base pages
+    :param range_idx: 
+    def merge(self, range_idx): int     #index of a pagerange inside self.page_ranges
+    """
     def merge(self, range_idx):
         try:
             pr = self.page_ranges[range_idx]
