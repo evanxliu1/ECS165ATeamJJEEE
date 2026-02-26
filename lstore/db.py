@@ -4,141 +4,99 @@ from lstore.table import Table, PageRange
 from lstore.bufferpool import BufferPool
 from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 
-
-"""
-# The Database class is the top level thing that manages all the tables
-# handles creating/dropping tables and saving/loading everything to disk
-# each database gets one shared bufferpool that all tables use
-"""
 class Database:
-    """
-    # initializes the database object
-    """
     def __init__(self):
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
 
-    """
-    # opens the database from path with the table's data
-    :param path: string     # the directory path to the database files
-    """
     def open(self, path):
         self.path = path
         os.makedirs(path, exist_ok=True)
         self.bufferpool.db_path = path
-        meta_path = os.path.join(path, 'db_meta.json')
-        if not os.path.exists(meta_path):
+        meta_pth = os.path.join(path, 'db_meta.json')
+        if not os.path.exists(meta_pth):
             return None
-        f = open(meta_path, 'r')
-        db_meta = json.load(f)
+        f = open(meta_pth, 'r')
+        meta = json.load(f)
         f.close()
-        for tname, tinfo in db_meta['tables'].items():
-            t = Table(tinfo['name'], tinfo['num_columns'], tinfo['key'], bufferpool=self.bufferpool)
-            table_meta_path = os.path.join(path, tname, 'table_meta.json')
-            if os.path.exists(table_meta_path):
-                f2 = open(table_meta_path, 'r')
-                table_meta = json.load(f2)
-                f2.close()
-                t.next_rid = table_meta['next_rid']
-                for rid_str, loc in table_meta['page_directory'].items():
-                    t.page_directory[int(rid_str)] = tuple(loc)
-                t.page_ranges = []
-                for i, pr_meta in enumerate(table_meta['page_ranges']):
-                    pr = PageRange(t.total_cols, table_name=tname, range_idx=i, bufferpool=self.bufferpool)
-                    pr.num_base_records = pr_meta['num_base_records']
-                    pr.num_tail_records = pr_meta['num_tail_records']
-                    if 'tps' in pr_meta:
-                        pr.tps = {int(k): v for k, v in pr_meta['tps'].items()}
-                    t.page_ranges.append(pr)
-            self.tables[tname] = t
-            self._rebuild_indexes(t)
+        for tn, info in meta['tables'].items():
+            tbl = Table(info['name'], info['num_columns'], info['key'], bufferpool=self.bufferpool)
+            tmeta_pth = os.path.join(path, tn, 'table_meta.json')
+            if os.path.exists(tmeta_pth):
+                fp2 = open(tmeta_pth, 'r')
+                tmeta = json.load(fp2)
+                fp2.close()
+                tbl.next_rid = tmeta['next_rid']
+                for rid_str, locn in tmeta['page_directory'].items():
+                    tbl.page_directory[int(rid_str)] = tuple(locn)
+                tbl.page_ranges = []
+                for i, pm in enumerate(tmeta['page_ranges']):
+                    prange = PageRange(tbl.total_cols, table_name=tn, range_idx=i, bufferpool=self.bufferpool)
+                    prange.num_base_records = pm['num_base_records']
+                    prange.num_tail_records = pm['num_tail_records']
+                    if 'tps' in pm:
+                        prange.tps = {int(k): v for k, v in pm['tps'].items()}
+                    tbl.page_ranges.append(prange)
+            self.tables[tn] = tbl
+            self._rebuild_indexes(tbl)
 
-
-    """
-    # saves data and closes the database path, effectively flushing data to disk
-    """
     def close(self):
         if self.path is None:
             return
-        # wait for any merge thats still running
-        for t in self.tables.values():
-            if t.merge_thread is not None and t.merge_thread.is_alive():
-                t.merge_thread.join()
+        for tbl in self.tables.values():
+            if tbl.merge_thread is not None and tbl.merge_thread.is_alive():
+                tbl.merge_thread.join()
         self.bufferpool.flush_all()
-        db_meta = {'tables': {}}
-        for tname, t in self.tables.items():
-            db_meta['tables'][tname] = {'name': t.name, 'num_columns': t.num_columns, 'key': t.key}
-        meta_path = os.path.join(self.path, 'db_meta.json')
-        f = open(meta_path, 'w')
-        json.dump(db_meta, f)
+        meta = {'tables': {}}
+        for tn, tbl in self.tables.items():
+            meta['tables'][tn] = {'name': tbl.name, 'num_columns': tbl.num_columns, 'key': tbl.key}
+        meta_pth = os.path.join(self.path, 'db_meta.json')
+        f = open(meta_pth, 'w')
+        json.dump(meta, f)
         f.close()
-        # each table gets its own directory with page range and page directory info
-        for tname, t in self.tables.items():
-            table_dir = os.path.join(self.path, tname)
-            os.makedirs(table_dir, exist_ok=True)
-            pd = {}
-            for k, v in t.page_directory.items():
-                pd[str(k)] = list(v)
-            pr_list = []
-            for pr in t.page_ranges:
-                pr_list.append({
-                    'num_base_records': pr.num_base_records,
-                    'num_tail_records': pr.num_tail_records,
-                    'tps': {str(k): v for k, v in pr.tps.items()}
+        for tn, tbl in self.tables.items():
+            tdir = os.path.join(self.path, tn)
+            os.makedirs(tdir, exist_ok=True)
+            pdir = {}
+            for k, v in tbl.page_directory.items():
+                pdir[str(k)] = list(v)
+            prlist = []
+            for prange in tbl.page_ranges:
+                prlist.append({
+                    'num_base_records': prange.num_base_records,
+                    'num_tail_records': prange.num_tail_records,
+                    'tps': {str(k): v for k, v in prange.tps.items()}
                 })
-            table_meta = {'next_rid': t.next_rid, 'page_directory': pd, 'page_ranges': pr_list}
-            table_meta_path = os.path.join(table_dir, 'table_meta.json')
-            f = open(table_meta_path, 'w')
-            json.dump(table_meta, f)
+            tmeta = {'next_rid': tbl.next_rid, 'page_directory': pdir, 'page_ranges': prlist}
+            tmeta_pth = os.path.join(tdir, 'table_meta.json')
+            f = open(tmeta_pth, 'w')
+            json.dump(tmeta, f)
             f.close()
 
-
-    """
-    # rebuilds an index using the page directory 
-    :param t: Table         # the table whose index is being rebuilt
-    """
-    def _rebuild_indexes(self, t):
-        # only need the key column, dont bother reading everything
-        key_col = t.key
-        for rid, loc in t.page_directory.items():
-            ri, is_tail, pg, slot = loc
+    # rebuild inddex from page directory (only key colum needed)
+    def _rebuild_indexes(self, tbl):
+        kcol = tbl.key
+        for rid, locn in tbl.page_directory.items():
+            rng_ix, is_tail, pgnum, sl = locn
             if is_tail:
                 continue
-            pr = t.page_ranges[ri]
-            key_val = pr.get_base_val(pg, slot, NUM_META_COLS + key_col)
-            t.index.insert_entry(key_col, key_val, rid)
+            prange = tbl.page_ranges[rng_ix]
+            kv = prange.get_base_val(pgnum, sl, NUM_META_COLS + kcol)
+            tbl.index.insert_entry(kcol, kv, rid)
 
-
-
-    """
-    # Creates a new table
-    :param name: string             #Table name
-    :param num_columns: int         #Number of Columns: all columns are integer
-    :param key_index: int           #Index of table key in columns
-    """
     def create_table(self, name, num_columns, key_index):
         if name in self.tables:
             return self.tables[name]
-        t = Table(name, num_columns, key_index, bufferpool=self.bufferpool)
-        self.tables[name] = t
-        return t
+        tbl = Table(name, num_columns, key_index, bufferpool=self.bufferpool)
+        self.tables[name] = tbl
+        return tbl
 
-
-    """
-    # Deletes the specified table
-    :param name: string       # name of the table
-    """
     def drop_table(self, name):
         if name in self.tables:
             del self.tables[name]
             return True
         return False
 
-
-    """
-    # Returns table with the passed name
-    :param name: string      # name of the table
-    """
     def get_table(self, name):
         return self.tables.get(name, None)
