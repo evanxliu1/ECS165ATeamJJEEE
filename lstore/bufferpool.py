@@ -3,9 +3,11 @@ from collections import OrderedDict
 from lstore.page import Page, write_page_to_disk, read_page_from_disk
 from lstore.config import BUFFERPOOL_CAPACITY
 
+"""
 # manages page caching so we dont have to hit disk every time
 # uses LRU ordered dict, evicts old pages when full
 # dirty pages get writen back befor eviction
+"""
 class BufferPool:
     def __init__(self, capacity=BUFFERPOOL_CAPACITY):
         self.capacity = capacity
@@ -53,9 +55,11 @@ class BufferPool:
         self.unpin(pid)
         return v
 
+    # marks a page as dirty...
     def mark_dirty(self, pid):
         self.dirty.add(pid)
 
+    # removes a page from the pinned pages
     def unpin(self, pid):
         if pid not in self.pin_counts:
             return
@@ -64,6 +68,7 @@ class BufferPool:
         if n <= 0:
             del self.pin_counts[pid]
 
+    # writes all dirty pages to disk
     def flush_all(self):
         dirty_list = [x for x in self.dirty]
         for pid in dirty_list:
@@ -82,6 +87,7 @@ class BufferPool:
         # everything pinned, just bump capcity
         self.capacity = self.capacity + 1
 
+    # writes all dirty pages to disk
     def _load_from_disk(self, pid):
         if self.db_path is None:
             return None
@@ -91,6 +97,7 @@ class BufferPool:
         except FileNotFoundError:
             return None
 
+    # removes all currently open pages or "flushes" them
     def _flush_page(self, pid):
         if self.db_path is None or pid not in self.pages:
             return None
