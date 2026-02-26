@@ -4,12 +4,19 @@ from lstore.table import Table, PageRange
 from lstore.bufferpool import BufferPool
 from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 
+
+"""
+# The Database class is the top level thing that manages all the tables
+# handles creating/dropping tables and saving/loading everything to disk
+# each database gets one shared bufferpool that all tables use
+"""
 class Database:
     def __init__(self):
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
 
+    # loads up a database from disk, reads the metadata json and rebuilds all the tables
     def open(self, path):
         self.path = path
         os.makedirs(path, exist_ok=True)
@@ -41,6 +48,7 @@ class Database:
             self.tables[tn] = tbl
             self._rebuild_indexes(tbl)
 
+    # saves everything to disk, flushes dirty pages and writes out all the metadata json files
     def close(self):
         if self.path is None:
             return
@@ -85,6 +93,7 @@ class Database:
             kv = prange.get_base_val(pgnum, sl, NUM_META_COLS + kcol)
             tbl.index.insert_entry(kcol, kv, rid)
 
+    # creates a new table if table isn't already made
     def create_table(self, name, num_columns, key_index):
         if name in self.tables:
             return self.tables[name]
@@ -92,11 +101,14 @@ class Database:
         self.tables[name] = tbl
         return tbl
 
+
+    # removes a table
     def drop_table(self, name):
         if name in self.tables:
             del self.tables[name]
             return True
         return False
 
+    # returns the desired table
     def get_table(self, name):
         return self.tables.get(name, None)
