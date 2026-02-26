@@ -13,7 +13,7 @@ class Record:
         self.columns = columns
 
     """
-    #Creates __getitem__ function to allow objects of class Record to be accessed with an index
+    #Creates __getitem__ method to allow objects of class Record to be accessed with an index
     """
     def __getitem__(self, idx):
         return self.columns[idx]
@@ -148,6 +148,9 @@ class PageRange:
 
 
 class Table:
+    """
+    #Creates Table object
+    """
     def __init__(self, name, num_columns, key, bufferpool=None):
         self.name = name
         self.key = key
@@ -160,6 +163,9 @@ class Table:
         self.merge_thread = None
         self.index = Index(self)
 
+    """
+    #Generates a new unique record ID every time this method is called
+    """
     def new_rid(self):
         r = self.next_rid
         self.next_rid = self.next_rid + 1
