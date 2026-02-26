@@ -22,13 +22,26 @@ class PageRange:
         self.num_base_records = 0
         self.num_tail_records = 0
         self.tps = {}
-
+    """
+    #Creates a unique identifier (ID) for a specific page
+    :param is_tail: boolean     #returns true or false depending on whether the current page is a tail page or base page
+    :param page_idx: int     #which page inside the page range
+    :param col_idx: int     #which column this page stores
+    """
     def _page_id(self, is_tail, page_idx, col_idx):
         return (self.table_name, self.range_idx, is_tail, page_idx, col_idx)
 
+    """
+    #Returns T/F based on whether the page range still has room for more base records
+    no param
+    """
     def has_capacity(self):
         return self.num_base_records < RECORDS_PER_PAGE_RANGE
 
+    """
+    #Inserts one base record into storage using the buffer pool
+    :param vals: list     #corresponds to column's value
+    """
     def add_base_record(self, vals):
         pg = self.num_base_records // RECORDS_PER_PAGE
         slot = self.num_base_records % RECORDS_PER_PAGE
@@ -42,7 +55,11 @@ class PageRange:
             self.bufferpool.unpin(pid)
         self.num_base_records = self.num_base_records + 1
         return pg, slot
-
+    
+    """
+    #Same thing as the function above but adds one tail record instead
+    :param vals: list     #column's value
+    """
     def add_tail_record(self, vals):
         pg = self.num_tail_records // RECORDS_PER_PAGE
         slot = self.num_tail_records % RECORDS_PER_PAGE
@@ -57,14 +74,33 @@ class PageRange:
         self.num_tail_records = self.num_tail_records + 1
         return pg, slot
 
+    """
+    #Returns the value stored in base page, column, at slot using the buffer pool
+    :param pg: int     #which base page
+    :param slot: int     #which row position within that page
+    :param col: int     #which column
+    """
     def get_base_val(self, pg, slot, col):
         pid = self._page_id(False, pg, col)
         return self.bufferpool.read_value(pid, slot)
 
+    """
+    #Returns the value stored in tail page, column, at slot
+    :param pg: int     #which base page
+    :param slot: int     #which row position
+    :param col: int     #which column
+    """
     def get_tail_val(self, pg, slot, col):
         pid = self._page_id(True, pg, col)
         return self.bufferpool.read_value(pid, slot)
 
+    """
+    #Reads num_cols consecutive columns from a base record located at pg, slot and returns as list
+    :param pg: int     #which base page
+    :param slot: int     #which record position within that page
+    :param start_col: int     #starting column index
+    :param num_cols: int     #how many columns to read
+    """
     def get_base_vals(self, pg, slot, start_col, num_cols):
         vals = []
         for i in range(num_cols):
@@ -72,6 +108,13 @@ class PageRange:
             vals.append(self.bufferpool.read_value(pid, slot))
         return vals
 
+    """
+    #Reads num_cols consecutive columns from a tail record located at pg, slot and returns as list
+    :param pg: int     #which base page
+    :param slot: int     #which record position within that page
+    :param start_col: int     #starting column index
+    :param num_cols: int     #how many columns to read
+    """
     def get_tail_vals(self, pg, slot, start_col, num_cols):
         vals = []
         for i in range(num_cols):
@@ -79,6 +122,13 @@ class PageRange:
             vals.append(self.bufferpool.read_value(pid, slot))
         return vals
 
+    """
+    #Writes val into base page pg, column col, at position slot
+    :param pg: int     #which base page
+    :param slot: int     #which record position within the page
+    :param col: int     #which column
+    :param val: any (depending on the column)     #the value being inserted
+    """
     def set_base_val(self, pg, slot, col, val):
         pid = self._page_id(False, pg, col)
         p = self.bufferpool.get_page(pid)
