@@ -42,7 +42,7 @@ class Index:
             res.extend(mp[klist[i]])
         return res
 
-     """
+    """
     # Inserts a record into the index
     :param val: int        # the value of the record to be inserted
     :param rid: int        # the id of the record so we can trace back to it later

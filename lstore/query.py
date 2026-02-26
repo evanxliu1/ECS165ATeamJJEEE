@@ -112,7 +112,7 @@ class Query:
             return False
 
 
-     """
+    """
     # Inserts a brand new record to the table as a base record and includes where to store and what is stored
     :param *columns: tuple   # takes any number of values and shoves it all into a tuple
     """
@@ -151,7 +151,7 @@ class Query:
             return False
 
 
- """
+    """
     # Finds all records whose values correspond to the search_key and returns only the requested columns
     # uses _locate to find matching rids (index or scan) then applies the projection
     :param search_key: int           # value we are searching for
@@ -216,7 +216,7 @@ class Query:
         except:
             return False
 
-     """
+    """
     # Finds a record with the primary key and creates a new tail record with updated values
     # then updates the base records pointer to point to this new tail record
     :param primary_key: int  # the main unique identifier for a record

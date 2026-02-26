@@ -123,7 +123,7 @@ class PageRange:
         return vlist
 
 
-     """
+    """
     #Reads num_cols consecutive columns from a tail record located at pg, slot and returns as list
     :param pg: int     #which base page
     :param slot: int     #which record position within that page
