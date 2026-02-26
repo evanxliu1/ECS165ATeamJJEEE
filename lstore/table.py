@@ -222,6 +222,10 @@ class Table:
         except Exception:
             pass
 
+    """
+    #Decides whether or not to start a background merge
+    :param range_idx: int     #index of a page range
+    """
     def maybe_trigger_merge(self, range_idx):
         pr = self.page_ranges[range_idx]
         if pr.num_tail_records < MERGE_THRESHOLD:
