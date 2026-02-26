@@ -4,16 +4,25 @@ from lstore.config import *
 
 
 class Record:
+    """
+    #Creates Record object
+    """
     def __init__(self, rid, key, columns):
         self.rid = rid
         self.key = key
         self.columns = columns
 
+    """
+    #Creates __getitem__ function to allow objects of class Record to be accessed with an index
+    """
     def __getitem__(self, idx):
         return self.columns[idx]
 
 
 class PageRange:
+    """
+    #Creates PageRange object
+    """
     def __init__(self, num_cols, table_name=None, range_idx=0, bufferpool=None):
         self.num_cols = num_cols
         self.table_name = table_name
