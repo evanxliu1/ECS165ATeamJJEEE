@@ -22,7 +22,6 @@ class Query:
     def __init__(self, table):
         self.table = table
 
-
     """
     # Finds all base record RIDs where a column equals a value
     # if theres an index on that column we use it, otherwise we do a full scan
@@ -30,10 +29,11 @@ class Query:
     :param value: int        # the value we are looking for
     """
     def _locate(self, column, value):
+
         if self.table.index.indices[column] is not None:
             return self.table.index.locate(column, value)
 
-        # no index on this column so we have to scan everything
+        # no index so we gotta scan everything
         rids = []
         for rid, loc in self.table.page_directory.items():
             _, is_tail, _, _ = loc
@@ -44,7 +44,6 @@ class Query:
                 rids.append(rid)
         return rids
 
-
     """
     # Same idea as _locate but for a range of values instead of an exact match
     :param begin: int        # lower bound of the range
@@ -52,10 +51,9 @@ class Query:
     :param column: int       # the number column in the database
     """
     def _locate_range(self, begin, end, column):
+
         if self.table.index.indices[column] is not None:
             return self.table.index.locate_range(begin, end, column)
-
-        # no index, full scan fallback
         rids = []
         for rid, loc in self.table.page_directory.items():
             _, is_tail, _, _ = loc
@@ -65,7 +63,6 @@ class Query:
             if begin <= vals[column] <= end:
                 rids.append(rid)
         return rids
-
 
     """
     # Returns the column values for a record identified by base_rid, if the base record's
@@ -81,10 +78,13 @@ class Query:
 
         indir = pr.get_base_val(pg, slot, INDIRECTION_COLUMN)
         if indir == NULL_RID:
-            vals = []
-            for i in range(self.table.num_columns):
-                vals.append(pr.get_base_val(pg, slot, NUM_META_COLS + i))
-            return vals
+            return pr.get_base_vals(pg, slot, NUM_META_COLS, self.table.num_columns)
+
+        # if merge already took care of this record just read from base
+        if version == 0:
+            tps_val = pr.tps.get(pg, 0)
+            if indir <= tps_val:
+                return pr.get_base_vals(pg, slot, NUM_META_COLS, self.table.num_columns)
 
         cur = indir
         steps = abs(version)
@@ -94,21 +94,14 @@ class Query:
             tpr = self.table.page_ranges[tri]
             prev = tpr.get_tail_val(tpg, tslot, INDIRECTION_COLUMN)
             if prev == NULL_RID:
-                vals = []
-                for i in range(self.table.num_columns):
-                    vals.append(pr.get_base_val(pg, slot, NUM_META_COLS + i))
-                return vals
+                return pr.get_base_vals(pg, slot, NUM_META_COLS, self.table.num_columns)
             cur = prev
 
         # read from whatever tail we ended up at
         tloc = self.table.page_directory[cur]
         tri, _, tpg, tslot = tloc
         tpr = self.table.page_ranges[tri]
-        vals = []
-        for i in range(self.table.num_columns):
-            vals.append(tpr.get_tail_val(tpg, tslot, NUM_META_COLS + i))
-        return vals
-
+        return tpr.get_tail_vals(tpg, tslot, NUM_META_COLS, self.table.num_columns)
 
     """
     # Takes a primary key and deletes the record from all indexes and the page directory
@@ -123,7 +116,7 @@ class Query:
                 return False
             rid = rids[0]
 
-            # we need the current values so we know what to remove from each index
+            # need current values so we know what to pull from each index
             vals = self._get_record_values(rid)
             for i in range(self.table.num_columns):
                 if self.table.index.indices[i] is not None:
@@ -134,7 +127,6 @@ class Query:
             return True
         except:
             return False
-
 
     """
     # Inserts a brand new record to the table as a base record and includes where to store and what is stored
@@ -167,7 +159,7 @@ class Query:
             pg, slot = pr.add_base_record(row)
             self.table.page_directory[rid] = (ri, False, pg, slot)
 
-            # add to every index that exists, not just the primary key one
+            # add to every index that exists not just the primary key one
             for i in range(self.table.num_columns):
                 if self.table.index.indices[i] is not None:
                     self.table.index.insert_entry(i, columns[i], rid)
@@ -175,7 +167,6 @@ class Query:
             return True
         except:
             return False
-
 
     """
     # Finds all records whose values correspond to the search_key and returns only the requested columns
@@ -209,7 +200,6 @@ class Query:
         except:
             return False
 
-
     """
     # Same as select except this function allows us to search for previous tail records
     :param search_key: int           # value we are searching for
@@ -242,14 +232,13 @@ class Query:
         except:
             return False
 
-
     """
     # Finds a record with the primary key and creates a new tail record with updated values
     # then updates the base records pointer to point to this new tail record
     :param primary_key: int  # the main unique identifier for a record
     :param *columns: tuple   # whatever you want to insert into the new tail record
     """
-    # we also update the schema encoding bits and fix any indexes where values changed
+    # here we find the record, read current vals, merge in the new ones and write a tail
     def update(self, primary_key, *columns):
         try:
             rids = self.table.index.locate(self.table.key, primary_key)
@@ -263,18 +252,26 @@ class Query:
             ri, _, pg, slot = self.table.page_directory[base_rid]
             pr = self.table.page_ranges[ri]
 
-            # reject if they're trying to change the PK to one that already exists
+            # reject if theyre trying to change the primary key
             if columns[self.table.key] is not None:
                 new_pk = columns[self.table.key]
                 if new_pk != primary_key:
-                    existing = self.table.index.locate(self.table.key, new_pk)
-                    if existing:
-                        return False
+                    return False
 
             old_indir = pr.get_base_val(pg, slot, INDIRECTION_COLUMN)
-            cur_vals = self._get_record_values(base_rid)
+            if old_indir == NULL_RID:
+                cur_vals = pr.get_base_vals(pg, slot, NUM_META_COLS, self.table.num_columns)
+            else:
+                tps_val = pr.tps.get(pg, 0)
+                if old_indir <= tps_val:
+                    cur_vals = pr.get_base_vals(pg, slot, NUM_META_COLS, self.table.num_columns)
+                else:
+                    tloc = self.table.page_directory[old_indir]
+                    tri, _, tpg, tslot = tloc
+                    tpr = self.table.page_ranges[tri]
+                    cur_vals = tpr.get_tail_vals(tpg, tslot, NUM_META_COLS, self.table.num_columns)
 
-            # merge old values with new ones
+            # merge old vals with new ones
             new_vals = list(cur_vals)
             schema = 0
             for i in range(self.table.num_columns):
@@ -294,23 +291,21 @@ class Query:
             tpg, tslot = pr.add_tail_record(tail_row)
             self.table.page_directory[tail_rid] = (ri, True, tpg, tslot)
 
-            # point base record to the new tail
+            # point base at the new tail
             pr.set_base_val(pg, slot, INDIRECTION_COLUMN, tail_rid)
             old_schema = pr.get_base_val(pg, slot, SCHEMA_ENCODING_COLUMN)
             pr.set_base_val(pg, slot, SCHEMA_ENCODING_COLUMN, old_schema | schema)
 
-            # update every index where the value actually changed
+            # update indexes where the value actually changed
             for i in range(self.table.num_columns):
                 if columns[i] is not None and self.table.index.indices[i] is not None:
                     if cur_vals[i] != new_vals[i]:
                         self.table.index.update_entry(i, cur_vals[i], new_vals[i], base_rid)
 
-            # if enough tail records piled up, kick off a background merge
             self.table.maybe_trigger_merge(ri)
             return True
         except:
             return False
-
 
     """
     # Computes the sum of one column over all records who fall in a certain range
@@ -334,7 +329,6 @@ class Query:
         except:
             return False
 
-
     """
     # Same as sum but allows you to look back at tail records
     :param start_range: int              # lower bound of primary key range
@@ -357,7 +351,6 @@ class Query:
             return total
         except:
             return False
-
 
     """
     # Adds 1 to a single column of the record identified by the primary key

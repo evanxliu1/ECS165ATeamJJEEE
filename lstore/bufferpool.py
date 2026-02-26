@@ -1,20 +1,28 @@
 import os
 from collections import OrderedDict
 from lstore.page import Page, write_page_to_disk, read_page_from_disk
+from lstore.config import BUFFERPOOL_CAPACITY
 
 
+"""
+# Manages page caching so we dont have to hit disk every time
+# uses an LRU ordered dict to track whats in memory and evicts old pages when full
+# dirty pages get written back to disk before eviction
+"""
 class BufferPool:
-    def __init__(self, capacity=1000):
+    def __init__(self, capacity=BUFFERPOOL_CAPACITY):
         """
         Manages in memory pages for the database
         capacity: maximum number of pages allowed in memory
         """
         self.capacity = capacity
         self.db_path = None
-        self.pages = OrderedDict()
-        self.dirty = set()
+        self.pages = OrderedDict()    # pid -> Page, ordered by access time
+        self.dirty = set()             # pids that have been modified
         self.pin_counts = {}
+        self._made_dirs = set()
 
+    # builds the filepath for a page based on its id tuple
     def _page_filepath(self, page_id):
         """
         Makes the file path for a given page ID
@@ -24,6 +32,7 @@ class BufferPool:
         seg = 'tail' if tail else 'base'
         return os.path.join(self.db_path, a, 'page_range_%d' % b, '%s_%d_%d.page' % (seg, p, c))
 
+    # grabs a page from cache or loads it from disk, pins it so it wont get evicted
     def get_page(self, pid):
         """
         Retrieves a page from memory or loads it from disk if you can't find it
@@ -49,6 +58,17 @@ class BufferPool:
         self.pin_counts[pid] = cnt
         return p
 
+    # fast path for reads - if the pages already cached we skip pinning entirely
+    def read_value(self, pid, slot):
+        page = self.pages.get(pid)
+        if page is not None:
+            return page.read(slot)
+        # not in cache so load it the normal way
+        page = self.get_page(pid)
+        val = page.read(slot)
+        self.unpin(pid)
+        return val
+
     def mark_dirty(self, pid):
         """
         Marks a page as modified so it will be written to disk before it gets evicted
@@ -68,6 +88,7 @@ class BufferPool:
         if c <= 0:
             del self.pin_counts[pid]
 
+    # writes all dirty pages to disk
     def flush_all(self):
         """
         Writes all dirty pages currently in memory to disk.
@@ -77,18 +98,19 @@ class BufferPool:
             self._flush_page(pid)
         self.dirty.clear()
 
+    # kicks out the least recently used unpinned page
     def _evict(self):
         """
         Removes the least recently used unpinned page from memory.
         """
-        for pid in list(self.pages.keys()):
-            if pid in self.pin_counts:
-                continue
-            if pid in self.dirty:
-                self._flush_page(pid)
-                self.dirty.discard(pid)
-            del self.pages[pid]
-            return
+        for pid in self.pages:
+            if pid not in self.pin_counts:
+                if pid in self.dirty:
+                    self._flush_page(pid)
+                    self.dirty.discard(pid)
+                del self.pages[pid]
+                return
+        # if everything is pinned, increase capacity
         self.capacity = self.capacity + 1
 
     def _load_from_disk(self, pid):
@@ -99,9 +121,10 @@ class BufferPool:
         if self.db_path is None:
             return None
         path = self._page_filepath(pid)
-        if not os.path.exists(path):
+        try:
+            return read_page_from_disk(path)
+        except FileNotFoundError:
             return None
-        return read_page_from_disk(path)
 
     def _flush_page(self, pid):
         """
@@ -112,5 +135,7 @@ class BufferPool:
             return None
         path = self._page_filepath(pid)
         d = os.path.dirname(path)
-        os.makedirs(d, exist_ok=True)
+        if d not in self._made_dirs:
+            os.makedirs(d, exist_ok=True)
+            self._made_dirs.add(d)
         write_page_to_disk(self.pages[pid], path)

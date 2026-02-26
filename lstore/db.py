@@ -2,9 +2,14 @@ import os
 import json
 from lstore.table import Table, PageRange
 from lstore.bufferpool import BufferPool
-from lstore.config import BUFFERPOOL_CAPACITY
+from lstore.config import BUFFERPOOL_CAPACITY, NUM_META_COLS
 
 
+"""
+# The Database class is the top level thing that manages all the tables
+# handles creating/dropping tables and saving/loading everything to disk
+# each database gets one shared bufferpool that all tables use
+"""
 class Database:
     """
     # initializes the database object
@@ -13,7 +18,6 @@ class Database:
         self.tables = {}
         self.path = None
         self.bufferpool = BufferPool(BUFFERPOOL_CAPACITY)
-
 
     """
     # opens the database from path with the table's data
@@ -57,6 +61,7 @@ class Database:
     def close(self):
         if self.path is None:
             return
+        # wait for any merge thats still running
         for t in self.tables.values():
             if t.merge_thread is not None and t.merge_thread.is_alive():
                 t.merge_thread.join()
@@ -68,6 +73,7 @@ class Database:
         f = open(meta_path, 'w')
         json.dump(db_meta, f)
         f.close()
+        # each table gets its own directory with page range and page directory info
         for tname, t in self.tables.items():
             table_dir = os.path.join(self.path, tname)
             os.makedirs(table_dir, exist_ok=True)
@@ -93,14 +99,15 @@ class Database:
     :param t: Table         # the table whose index is being rebuilt
     """
     def _rebuild_indexes(self, t):
-        from lstore.query import Query
-        q = Query(t)
+        # only need the key column, dont bother reading everything
+        key_col = t.key
         for rid, loc in t.page_directory.items():
-            (_, is_tail, _, _) = loc
+            ri, is_tail, pg, slot = loc
             if is_tail:
                 continue
-            vals = q._get_record_values(rid)
-            t.index.insert_entry(t.key, vals[t.key], rid)
+            pr = t.page_ranges[ri]
+            key_val = pr.get_base_val(pg, slot, NUM_META_COLS + key_col)
+            t.index.insert_entry(key_col, key_val, rid)
 
 
 

@@ -59,17 +59,25 @@ class PageRange:
 
     def get_base_val(self, pg, slot, col):
         pid = self._page_id(False, pg, col)
-        p = self.bufferpool.get_page(pid)
-        v = p.read(slot)
-        self.bufferpool.unpin(pid)
-        return v
+        return self.bufferpool.read_value(pid, slot)
 
     def get_tail_val(self, pg, slot, col):
         pid = self._page_id(True, pg, col)
-        p = self.bufferpool.get_page(pid)
-        v = p.read(slot)
-        self.bufferpool.unpin(pid)
-        return v
+        return self.bufferpool.read_value(pid, slot)
+
+    def get_base_vals(self, pg, slot, start_col, num_cols):
+        vals = []
+        for i in range(num_cols):
+            pid = self._page_id(False, pg, start_col + i)
+            vals.append(self.bufferpool.read_value(pid, slot))
+        return vals
+
+    def get_tail_vals(self, pg, slot, start_col, num_cols):
+        vals = []
+        for i in range(num_cols):
+            pid = self._page_id(True, pg, start_col + i)
+            vals.append(self.bufferpool.read_value(pid, slot))
+        return vals
 
     def set_base_val(self, pg, slot, col, val):
         pid = self._page_id(False, pg, col)
@@ -109,28 +117,36 @@ class Table:
         return len(self.page_ranges) - 1, last
 
     def merge(self, range_idx):
-        pr = self.page_ranges[range_idx]
-        n_pages = (pr.num_base_records + RECORDS_PER_PAGE - 1) // RECORDS_PER_PAGE
-        for pg_idx in range(n_pages):
-            max_tail = pr.tps.get(pg_idx, 0)
-            n_slots = min(RECORDS_PER_PAGE, pr.num_base_records - pg_idx * RECORDS_PER_PAGE)
-            for slot in range(n_slots):
-                rid = pr.get_base_val(pg_idx, slot, RID_COLUMN)
-                if rid not in self.page_directory:
-                    continue
-                indir = pr.get_base_val(pg_idx, slot, INDIRECTION_COLUMN)
-                if indir == NULL_RID or indir <= max_tail:
-                    continue
-                if indir not in self.page_directory:
-                    continue
-                tloc = self.page_directory[indir]
-                tri, _, tpg, tslot = tloc
-                tpr = self.page_ranges[tri]
-                for col in range(NUM_META_COLS, self.total_cols):
-                    v = tpr.get_tail_val(tpg, tslot, col)
-                    pr.set_base_val(pg_idx, slot, col, v)
-                max_tail = max(max_tail, indir)
-            pr.tps[pg_idx] = max_tail
+        try:
+            pr = self.page_ranges[range_idx]
+            page_dir = self.page_directory
+            page_ranges = self.page_ranges
+            total_cols = self.total_cols
+            num_user_cols = total_cols - NUM_META_COLS
+            n_base = pr.num_base_records
+            n_pages = (n_base + RECORDS_PER_PAGE - 1) // RECORDS_PER_PAGE
+            for pg_idx in range(n_pages):
+                max_tail = pr.tps.get(pg_idx, 0)
+                n_slots = min(RECORDS_PER_PAGE, n_base - pg_idx * RECORDS_PER_PAGE)
+                for slot in range(n_slots):
+                    rid = pr.get_base_val(pg_idx, slot, RID_COLUMN)
+                    if rid not in page_dir:
+                        continue
+                    indir = pr.get_base_val(pg_idx, slot, INDIRECTION_COLUMN)
+                    if indir == NULL_RID or indir <= max_tail:
+                        continue
+                    if indir not in page_dir:
+                        continue
+                    tloc = page_dir[indir]
+                    tri, _, tpg, tslot = tloc
+                    tpr = page_ranges[tri]
+                    vals = tpr.get_tail_vals(tpg, tslot, NUM_META_COLS, num_user_cols)
+                    for i in range(num_user_cols):
+                        pr.set_base_val(pg_idx, slot, NUM_META_COLS + i, vals[i])
+                    max_tail = max(max_tail, indir)
+                pr.tps[pg_idx] = max_tail
+        except Exception:
+            pass
 
     def maybe_trigger_merge(self, range_idx):
         pr = self.page_ranges[range_idx]

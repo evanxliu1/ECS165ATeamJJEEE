@@ -1,3 +1,6 @@
+from bisect import bisect_left, bisect_right, insort
+
+
 class Index:
     """
     # Initializes the table
@@ -6,7 +9,9 @@ class Index:
     def __init__(self, table):
         self.table = table
         self.indices = [None] * table.num_columns
+        self.sorted_keys = [None] * table.num_columns
         self.indices[table.key] = {}
+        self.sorted_keys[table.key] = []
 
     
     """
@@ -33,10 +38,12 @@ class Index:
         m = self.indices[col]
         if m is None:
             return []
+        keys = self.sorted_keys[col]
+        lo = bisect_left(keys, begin)
+        hi = bisect_right(keys, end)
         out = []
-        for v, rids in m.items():
-            if begin <= v <= end:
-                out.extend(rids) # returns list of RIDs
+        for i in range(lo, hi):
+            out.extend(m[keys[i]])
         return out
 
     
@@ -52,6 +59,7 @@ class Index:
         m = self.indices[col]
         if val not in m:
             m[val] = []
+            insort(self.sorted_keys[col], val)
         m[val].append(rid)
 
 
@@ -88,6 +96,10 @@ class Index:
             pass
         if len(m[val]) == 0:
             del m[val]
+            keys = self.sorted_keys[col]
+            idx = bisect_left(keys, val)
+            if idx < len(keys) and keys[idx] == val:
+                keys.pop(idx)
 
 
     """
@@ -98,6 +110,7 @@ class Index:
         if self.indices[col_num] is not None:
             return
         self.indices[col_num] = {}
+        self.sorted_keys[col_num] = []
         self._populate_index(col_num)
 
     
@@ -108,6 +121,7 @@ class Index:
     # turn off indexing for a column
     def drop_index(self, col_num):
         self.indices[col_num] = None
+        self.sorted_keys[col_num] = None
 
     
     """
